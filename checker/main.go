@@ -64,7 +64,6 @@ func deactivateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build and send deactivation request
 	form := fmt.Sprintf("license_key=%s&instance_id=%s", req.LicenseKey, instanceID)
 	reqDeactivate, _ := http.NewRequest("POST", "https://api.lemonsqueezy.com/v1/licenses/deactivate", strings.NewReader(form))
 	reqDeactivate.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -76,6 +75,11 @@ func deactivateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer res.Body.Close()
+
+	if _, err := readAndLogResponseBody(res, "deactivate"); err != nil {
+		http.Error(w, "Failed to read response", http.StatusInternalServerError)
+		return
+	}
 
 	var result struct {
 		Deactivated bool   `json:"deactivated"`
@@ -128,6 +132,10 @@ func activateLicense(key, instanceName string) (bool, string, string, error) {
 	}
 	defer res.Body.Close()
 
+	if _, err := readAndLogResponseBody(res, "activate"); err != nil {
+		return false, "", "", fmt.Errorf("failed reading response: %w", err)
+	}
+
 	var result ActivateResponse
 	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
 		return false, "", "", fmt.Errorf("invalid response: %w", err)
@@ -158,6 +166,10 @@ func validateLicense(key, instanceID string) (bool, string, string, error) {
 		return false, "", "", fmt.Errorf("validation failed: %w", err)
 	}
 	defer res.Body.Close()
+
+	if _, err := readAndLogResponseBody(res, "validate"); err != nil {
+		return false, "", "", fmt.Errorf("failed reading response: %w", err)
+	}
 
 	var result ValidateResponse
 	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {

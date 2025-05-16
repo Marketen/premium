@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -55,4 +58,16 @@ func nowISO8601() string {
 func writeJSON(w http.ResponseWriter, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
+}
+
+func readAndLogResponseBody(res *http.Response, label string) ([]byte, error) {
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("Lemon API [%s] Response (%d): %s\n", label, res.StatusCode, string(body))
+
+	// Reset body so it can be parsed again
+	res.Body = io.NopCloser(bytes.NewBuffer(body))
+	return body, nil
 }
