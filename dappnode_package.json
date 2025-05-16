@@ -1,0 +1,20 @@
+{
+  "name": "premium.public.dappnode.eth",
+  "version": "0.1.0",
+  "description": "premium.public.dappnode.eth description",
+  "type": "service",
+  "author": "marc",
+  "categories": ["Developer tools"],
+  "links": {
+    "homepage": "https://your-project-homepage-or-docs.io"
+  },
+  "license": "GPL-3.0",
+  "globalEnvs": [
+    {
+      "envs": [
+        "HOSTNAME"
+      ],
+      "services": ["stakers-metrics"]
+    }
+  ]
+}

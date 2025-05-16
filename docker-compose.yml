@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  checker:
+    build:
+      context: ./checker
+    container_name: license_checker
+    ports:
+      - "8060:8060"
+    volumes:
+      - checker_data:/data
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: ./ui
+    container_name: license_ui
+    depends_on:
+      - checker
+    restart: unless-stopped
+
+volumes:
+  checker_data: {}
