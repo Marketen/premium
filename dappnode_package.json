@@ -14,7 +14,7 @@
       "envs": [
         "HOSTNAME"
       ],
-      "services": ["stakers-metrics"]
+      "services": ["checker"]
     }
   ]
 }
