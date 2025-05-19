@@ -1,5 +1,5 @@
 import React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./index.css";
 
 
@@ -7,6 +7,23 @@ export default function App() {
   const [licenseKey, setLicenseKey] = useState("");
   const [instanceName, setInstanceName] = useState("");
   const [result, setResult] = useState(null);
+
+
+useEffect(() => {
+  const fetchStoredLicense = async () => {
+    try {
+      const res = await fetch("/api/license");
+      if (res.ok) {
+        const data = await res.json();
+        setLicenseKey(data.key);
+      }
+    } catch (err) {
+      console.error("Failed to fetch license key:", err);
+    }
+  };
+
+  fetchStoredLicense();
+}, []);
 
   const handleCheck = async () => {
     try {
@@ -78,6 +95,12 @@ export default function App() {
   return (
     <main className="main">
       <div className="container">
+        <a
+        href="https://testdappnodepremium.lemonsqueezy.com/buy/91e0f96c-4e0e-4c2a-bf31-a6ebaef4fce5?embed=1"
+        className="lemonsqueezy-button"
+        >
+        Buy Dappnode Premium
+      </a>
         <h1>License Checker</h1>
         <input
           type="text"

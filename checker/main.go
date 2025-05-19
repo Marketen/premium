@@ -17,6 +17,7 @@ func main() {
 	router := mux.NewRouter()
 	router.HandleFunc("/api/check", checkLicenseHandler).Methods("POST")
 	router.HandleFunc("/api/deactivate", deactivateHandler).Methods("POST")
+	router.HandleFunc("/api/license", getLicenseKeyHandler).Methods("GET")
 
 	const port = ":8060"
 	log.Printf("Server started on %s", port)
@@ -48,7 +49,6 @@ func checkLicenseHandler(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, resp)
 }
-
 func deactivateHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		LicenseKey string `json:"license_key"`
@@ -95,9 +95,37 @@ func deactivateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Remove both stored instance and license key file
 	_ = os.Remove(InstanceFile)
+	_ = os.Remove("/data/licence.json") // <- This deletes the license key
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Deactivated successfully"))
+}
+
+func getLicenseKeyHandler(w http.ResponseWriter, r *http.Request) {
+	const licensePath = "/data/licence.json"
+
+	file, err := os.Open(licensePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "License not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Error reading license file", http.StatusInternalServerError)
+		}
+		return
+	}
+	defer file.Close()
+
+	var data struct {
+		Key string `json:"key"`
+	}
+	if err := json.NewDecoder(file).Decode(&data); err != nil {
+		http.Error(w, "Invalid license file format", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, data)
 }
 
 // ========== Core License Logic ==========
@@ -121,6 +149,15 @@ func validateOrActivateLicense(key, instanceName string, force bool) (bool, stri
 }
 
 func activateLicense(key, instanceName string) (bool, string, string, error) {
+	const licensePath = "/data/licence.json"
+
+	// Check if licence.json already exists
+	if _, err := os.Stat(licensePath); err == nil {
+		return false, "", "", fmt.Errorf("license already activated: %s exists", licensePath)
+	} else if !os.IsNotExist(err) {
+		return false, "", "", fmt.Errorf("could not check license file: %w", err)
+	}
+
 	form := fmt.Sprintf("license_key=%s&instance_name=%s", key, instanceName)
 	req, _ := http.NewRequest("POST", "https://api.lemonsqueezy.com/v1/licenses/activate", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -145,8 +182,26 @@ func activateLicense(key, instanceName string) (bool, string, string, error) {
 		return false, "", "", fmt.Errorf("activation failed (%d): %s", res.StatusCode, result.Error)
 	}
 
+	// Encrypt and store instance ID (for later validation use)
 	if encryptedID, err := encrypt(result.Instance.ID); err == nil {
 		_ = storeInstance(encryptedID)
+	}
+
+	// Save only the license key to /data/licence.json
+	licenseKeyJSON := struct {
+		Key string `json:"key"`
+	}{
+		Key: result.LicenseKey.Key,
+	}
+
+	file, err := os.OpenFile(licensePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return false, "", "", fmt.Errorf("failed to create license file: %w", err)
+	}
+	defer file.Close()
+
+	if err := json.NewEncoder(file).Encode(licenseKeyJSON); err != nil {
+		return false, "", "", fmt.Errorf("failed to write license file: %w", err)
 	}
 
 	valid := result.LicenseKey.Status == "active" &&
