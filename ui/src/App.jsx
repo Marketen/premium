@@ -80,8 +80,6 @@ export default function App() {
       });
       const text = await res.text();
       setResult({ message: text });
-      // Instead of forcing state, reload license info to update UI
-      fetchStoredLicense();
     } catch (err) {
       setResult({ error: "Request failed: " + err.message });
     }
@@ -113,6 +111,7 @@ export default function App() {
           <button onClick={handleActivate}>Activate</button>
           <button onClick={handleCheck}>Check License</button>
           <button className="red" onClick={handleDeactivate}>Deactivate</button>
+          <button className="purple" onClick={() => window.open('https://testdappnodepremium.lemonsqueezy.com/billing', '_blank')}>Manage Subscription</button>
         </div>
         {result && (
           <pre>{JSON.stringify(result, null, 2)}</pre>
