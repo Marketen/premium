@@ -2,7 +2,14 @@ package main
 
 // ========== Constants ==========
 
-const InstanceFile = "/data/licence_instance.json"
+const (
+	InstanceFile     = "/data/licence_instance.json"
+	InstanceFilePerm = 0644
+	LicenseFilePerm  = 0600
+	TimeFormat       = "2006-01-02T15:04:05.000000Z"
+	Port             = ":8060"
+	LicenseFilePath  = "/data/licence.json"
+)
 
 // ========== Global Structs ==========
 
