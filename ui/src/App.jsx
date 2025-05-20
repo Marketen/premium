@@ -7,23 +7,51 @@ export default function App() {
   const [licenseKey, setLicenseKey] = useState("");
   const [instanceName, setInstanceName] = useState("");
   const [result, setResult] = useState(null);
+  const [licenseStored, setLicenseStored] = useState(false);
 
 
-useEffect(() => {
+  // Move fetchStoredLicense outside useEffect so it can be reused
   const fetchStoredLicense = async () => {
     try {
       const res = await fetch("/api/license");
       if (res.ok) {
         const data = await res.json();
         setLicenseKey(data.key);
+        setLicenseStored(true);
+      } else {
+        setLicenseStored(false);
       }
     } catch (err) {
-      console.error("Failed to fetch license key:", err);
+      setLicenseStored(false);
     }
   };
 
-  fetchStoredLicense();
-}, []);
+  useEffect(() => {
+    fetchStoredLicense();
+  }, []);
+
+  const handleActivate = async () => {
+    setResult(null); // Clear previous result
+    if (!licenseKey || !instanceName) {
+      setResult({ error: "License key and instance name are required." });
+      return;
+    }
+    try {
+      const res = await fetch("/api/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          license_key: licenseKey,
+          instance_name: instanceName,
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+      if (!data.error) setLicenseStored(true);
+    } catch (err) {
+      setResult({ error: "Request failed: " + err.message });
+    }
+  };
 
   const handleCheck = async () => {
     try {
@@ -36,9 +64,7 @@ useEffect(() => {
         }),
       });
       const data = await res.json();
-      setResult({
-        ...data,
-      });
+      setResult(data);
     } catch (err) {
       setResult({ error: "Request failed: " + err.message });
     }
@@ -54,42 +80,11 @@ useEffect(() => {
       });
       const text = await res.text();
       setResult({ message: text });
+      // Instead of forcing state, reload license info to update UI
+      fetchStoredLicense();
     } catch (err) {
       setResult({ error: "Request failed: " + err.message });
     }
-  };
-
-  const handleValidateRandom = async () => {
-    const randomId = self.crypto?.randomUUID?.() || generateRandomId();
-    try {
-      const res = await fetch("/api/check?force=true", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          license_key: licenseKey,
-          instance_name: randomId,
-        }),
-      });
-      const data = await res.json();
-      setResult({
-        ...data,
-        tested_instance_id: randomId,
-      });
-    } catch (err) {
-      setResult({
-        error: "Request failed: " + err.message,
-        tested_instance_id: randomId,
-      });
-    }
-  };
-  
-
-  const generateRandomId = () => {
-    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
-      const r = (Math.random() * 16) | 0;
-      const v = c === "x" ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
   };
 
   return (
@@ -115,9 +110,9 @@ useEffect(() => {
           onChange={(e) => setInstanceName(e.target.value)}
         />
         <div className="button-row">
+          <button onClick={handleActivate}>Activate</button>
           <button onClick={handleCheck}>Check License</button>
           <button className="red" onClick={handleDeactivate}>Deactivate</button>
-          <button className="purple" onClick={handleValidateRandom}>Validate Random</button>
         </div>
         {result && (
           <pre>{JSON.stringify(result, null, 2)}</pre>

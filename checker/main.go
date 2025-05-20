@@ -15,6 +15,7 @@ import (
 
 func main() {
 	router := mux.NewRouter()
+	router.HandleFunc("/api/activate", activateLicenseHandler).Methods("POST")
 	router.HandleFunc("/api/check", checkLicenseHandler).Methods("POST")
 	router.HandleFunc("/api/deactivate", deactivateHandler).Methods("POST")
 	router.HandleFunc("/api/license", getLicenseKeyHandler).Methods("GET")
@@ -27,6 +28,26 @@ func main() {
 
 // ====== HTTP Handlers ======
 
+func activateLicenseHandler(w http.ResponseWriter, r *http.Request) {
+	var req CheckRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeHTTPError(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	premium, instanceID, expiresAt, err := activateLicense(req.LicenseKey, req.InstanceName)
+	if err != nil {
+		writeHTTPError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	resp := CheckResponse{
+		Premium:    premium,
+		InstanceID: instanceID,
+		ExpiresAt:  expiresAt,
+	}
+	writeJSON(w, resp)
+}
+
 func checkLicenseHandler(w http.ResponseWriter, r *http.Request) {
 	var req CheckRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -34,16 +55,31 @@ func checkLicenseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	force := r.URL.Query().Get("force") == "true"
-	premium, instanceID, expiresAt, err := validateOrActivateLicense(req.LicenseKey, req.InstanceName, force)
+	// Only allow check if license is already stored
+	if _, err := os.Stat(LicenseFilePath); os.IsNotExist(err) {
+		writeHTTPError(w, "No license activated", http.StatusBadRequest)
+		return
+	}
 
+	stored := readInstance()
+	if stored.EncryptedID == "" {
+		writeHTTPError(w, "No instance ID stored", http.StatusBadRequest)
+		return
+	}
+	id, decErr := decrypt(stored.EncryptedID)
+	if decErr != nil {
+		writeHTTPError(w, "Failed to decrypt instance ID", http.StatusInternalServerError)
+		return
+	}
+	premium, instanceID, expiresAt, err := validateLicense(req.LicenseKey, id)
+	if err != nil {
+		writeHTTPError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	resp := CheckResponse{
 		Premium:    premium,
 		InstanceID: instanceID,
 		ExpiresAt:  expiresAt,
-	}
-	if err != nil {
-		resp.Error = err.Error()
 	}
 	writeJSON(w, resp)
 }
@@ -126,32 +162,8 @@ func getLicenseKeyHandler(w http.ResponseWriter, r *http.Request) {
 
 // ====== Core License Logic ======
 
-// validateOrActivateLicense validates the license or activates it if needed.
-func validateOrActivateLicense(key, instanceName string, force bool) (premium bool, instanceID, expiresAt string, err error) {
-	if force {
-		return validateLicense(key, "invalid-forced-instance-id")
-	}
-	stored := readInstance()
-	if stored.EncryptedID != "" {
-		if id, decErr := decrypt(stored.EncryptedID); decErr == nil {
-			return validateLicense(key, id)
-		} else {
-			log.Println("Decryption failed, activating instead:", decErr)
-		}
-	} else {
-		log.Println("No stored instance ID, activating instead")
-	}
-	return activateLicense(key, instanceName)
-}
-
 // activateLicense activates a license and stores the instance and license key.
 func activateLicense(key, instanceName string) (premium bool, instanceID, expiresAt string, err error) {
-	// Check if license file already exists
-	if _, statErr := os.Stat(LicenseFilePath); statErr == nil {
-		return false, "", "", fmt.Errorf("license already activated: %s exists", LicenseFilePath)
-	} else if !os.IsNotExist(statErr) {
-		return false, "", "", fmt.Errorf("could not check license file: %w", statErr)
-	}
 
 	form := fmt.Sprintf("license_key=%s&instance_name=%s", key, instanceName)
 	req, _ := http.NewRequest("POST", "https://api.lemonsqueezy.com/v1/licenses/activate", strings.NewReader(form))

@@ -83,3 +83,10 @@ pre {
   text-decoration: none;
   cursor: pointer;
 }
+
+.button-row button:disabled {
+  background-color: #ccc !important;
+  color: #888 !important;
+  cursor: not-allowed;
+  border: 1px solid #bbb;
+}
